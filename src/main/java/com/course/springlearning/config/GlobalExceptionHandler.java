@@ -3,6 +3,8 @@ package com.course.springlearning.config;
 import com.course.springlearning.order.exception.InvalidOrderStatusException;
 import com.course.springlearning.order.exception.OrderAccessDeniedException;
 import com.course.springlearning.order.exception.OrderNotFoundException;
+import com.course.springlearning.report.exception.ReportOrderNotFoundException;
+import com.course.springlearning.report.exception.ReportPdfNotAvailableException;
 import com.course.springlearning.user.exception.DuplicateUserException;
 import com.course.springlearning.user.exception.UserDisabledException;
 import com.course.springlearning.user.exception.UserNotFoundException;
@@ -51,6 +53,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(InvalidOrderStatusException.class)
     public ProblemDetail handleInvalidOrderStatus(InvalidOrderStatusException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(ReportOrderNotFoundException.class)
+    public ProblemDetail handleReportOrderNotFound(ReportOrderNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(ReportPdfNotAvailableException.class)
+    public ProblemDetail handleReportPdfNotAvailable(ReportPdfNotAvailableException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
     }
 

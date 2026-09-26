@@ -2,6 +2,11 @@ spring:
   application:
     name: springlearning
 
+  # Loads local secrets (OPENROUTER_API_KEY) from the git-ignored .env file in the working directory.
+  # "optional:" keeps startup working when the value comes from a real environment variable instead (e.g. Docker).
+  config:
+    import: "optional:file:.env[.properties]"
+
   # PostgreSQL (defaults target local run against docker-compose services)
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/springlearning}
@@ -34,6 +39,24 @@ spring:
     consumer:
       group-id: springlearning
       auto-offset-reset: earliest
+
+  # Spring AI through OpenRouter's OpenAI-compatible API
+  ai:
+    openai:
+      api-key: ${OPENROUTER_API_KEY}
+      base-url: https://openrouter.ai/api/v1
+      chat:
+        model: deepseek/deepseek-v4-flash-0731
+        # Deterministic answers: the report only needs exact numbers
+        temperature: 0
+    # Only the chat model is used, so the other OpenAI model types are not created
+    model:
+      embedding: none
+      image: none
+      audio:
+        speech: none
+        transcription: none
+      moderation: none
 
 # Application settings
 app:
