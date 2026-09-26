@@ -59,6 +59,10 @@ public class ReportOrder {
     @Column(name = "report_summary", columnDefinition = "text")
     private String reportSummary;
 
+    // PDF file of this report (bytea), null until the AI process finishes
+    @Column(name = "pdf_report")
+    private byte[] pdfReport;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "report_progress", nullable = false, columnDefinition = "text")
     private ReportProgress reportProgress = ReportProgress.IN_PROGRESS;

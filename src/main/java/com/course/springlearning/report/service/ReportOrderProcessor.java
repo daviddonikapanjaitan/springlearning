@@ -1,5 +1,6 @@
 package com.course.springlearning.report.service;
 
+import com.course.springlearning.report.ai.GeneratedReport;
 import com.course.springlearning.report.ai.OrderReportAiClient;
 import com.course.springlearning.report.dto.ReportResult;
 import com.course.springlearning.report.entity.ReportOrder;
@@ -42,9 +43,9 @@ public class ReportOrderProcessor {
     @Async
     public void process(Long userId, List<Long> reportIds) {
         try {
-            ReportResult result = aiClient.createReport(userId);
-            finish(reportIds, ReportProgress.COMPLETED, result);
-            log.info("Report {} for user {} completed: {}", reportIds, userId, result);
+            GeneratedReport report = aiClient.createReport(userId);
+            finish(reportIds, ReportProgress.COMPLETED, report);
+            log.info("Report {} for user {} completed: {}", reportIds, userId, report.result());
         } catch (RuntimeException e) {
             log.error("Report {} for user {} failed", reportIds, userId, e);
             try {
@@ -55,12 +56,13 @@ public class ReportOrderProcessor {
         }
     }
 
-    // A null result leaves total_amount and report_summary empty (used for FAILED)
-    private void finish(List<Long> reportIds, ReportProgress progress, ReportResult result) {
+    // A null report leaves total_amount, report_summary and pdf_report empty (used for FAILED)
+    private void finish(List<Long> reportIds, ReportProgress progress, GeneratedReport generated) {
         transactionTemplate.executeWithoutResult(status -> {
             Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
             for (ReportOrder report : reportOrderRepository.findAllById(reportIds)) {
-                if (result != null) {
+                if (generated != null) {
+                    ReportResult result = generated.result();
                     switch (report.getOrderStatus()) {
                         case COMPLETED -> {
                             report.setTotalAmount(result.completedTotalAmount());
@@ -72,6 +74,7 @@ public class ReportOrderProcessor {
                         }
                         case PENDING -> throw new IllegalStateException("Report " + report.getId() + " has status PENDING");
                     }
+                    report.setPdfReport(generated.pdfs().get(report.getOrderStatus()));
                 }
                 report.setReportProgress(progress);
                 report.setUpdatedAt(now);

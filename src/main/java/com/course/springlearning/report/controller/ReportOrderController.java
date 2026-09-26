@@ -2,13 +2,18 @@ package com.course.springlearning.report.controller;
 
 import com.course.springlearning.report.dto.CreateReportOrderRequest;
 import com.course.springlearning.report.dto.ReportOrderResponse;
+import com.course.springlearning.report.dto.ReportPdfFile;
 import com.course.springlearning.report.service.ReportOrderService;
 import com.course.springlearning.user.dto.PageResponse;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -50,6 +55,18 @@ public class ReportOrderController {
         int safePage = Math.max(page, 0);
         int safeSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
         return reportOrderService.findAll(userId, PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "id")));
+    }
+
+    // Downloads the PDF report; 409 while the report is still IN_PROGRESS or when it FAILED
+    @GetMapping("/{id}/pdf")
+    public ResponseEntity<byte[]> downloadPdf(@PathVariable Long id) {
+        ReportPdfFile pdf = reportOrderService.getPdf(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .contentLength(pdf.content().length)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(pdf.fileName()).build().toString())
+                .body(pdf.content());
     }
 
     private static String resolveActor(String actor) {

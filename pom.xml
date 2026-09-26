@@ -29,6 +29,7 @@
 	<properties>
 		<java.version>26</java.version>
 		<spring-ai.version>2.0.1</spring-ai.version>
+		<openpdf.version>3.0.5</openpdf.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -67,6 +68,12 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-kafka</artifactId>
+		</dependency>
+		<!-- PDF generation for report orders -->
+		<dependency>
+			<groupId>com.github.librepdf</groupId>
+			<artifactId>openpdf</artifactId>
+			<version>${openpdf.version}</version>
 		</dependency>
 		<!-- Spring AI with the OpenAI-compatible API, pointed at OpenRouter -->
 		<dependency>

@@ -2,8 +2,11 @@ package com.course.springlearning.report.service;
 
 import com.course.springlearning.order.entity.OrderStatus;
 import com.course.springlearning.report.dto.ReportOrderResponse;
+import com.course.springlearning.report.dto.ReportPdfFile;
 import com.course.springlearning.report.entity.ReportOrder;
 import com.course.springlearning.report.entity.ReportProgress;
+import com.course.springlearning.report.exception.ReportOrderNotFoundException;
+import com.course.springlearning.report.exception.ReportPdfNotAvailableException;
 import com.course.springlearning.report.repository.ReportOrderRepository;
 import com.course.springlearning.user.dto.PageResponse;
 import com.course.springlearning.user.entity.User;
@@ -18,6 +21,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class ReportOrderService {
@@ -80,5 +84,18 @@ public class ReportOrderService {
                 ? reportOrderRepository.findAll(pageable)
                 : reportOrderRepository.findAllByUser_Id(userId, pageable);
         return PageResponse.from(reports.map(ReportOrderResponse::from));
+    }
+
+    /** The PDF of a COMPLETED report, e.g. file name report-order-7-completed.pdf */
+    @Transactional(readOnly = true)
+    public ReportPdfFile getPdf(Long id) {
+        ReportOrder report = reportOrderRepository.findById(id)
+                .orElseThrow(() -> new ReportOrderNotFoundException(id));
+        if (report.getReportProgress() != ReportProgress.COMPLETED || report.getPdfReport() == null) {
+            throw new ReportPdfNotAvailableException(id, report.getReportProgress());
+        }
+        String fileName = "report-order-" + id + "-" + report.getOrderStatus().name().toLowerCase(Locale.ROOT)
+                .replace('_', '-') + ".pdf";
+        return new ReportPdfFile(fileName, report.getPdfReport());
     }
 }

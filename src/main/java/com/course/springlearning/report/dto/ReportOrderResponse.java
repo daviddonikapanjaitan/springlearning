@@ -12,6 +12,8 @@ public record ReportOrderResponse(
         OrderStatus orderStatus,
         Long totalAmount,
         String reportSummary,
+        // The PDF itself is downloaded with GET /api/report-orders/{id}/pdf
+        boolean pdfAvailable,
         ReportProgress reportProgress,
         Instant createdAt,
         String createdBy,
@@ -27,6 +29,7 @@ public record ReportOrderResponse(
                 report.getOrderStatus(),
                 report.getTotalAmount(),
                 report.getReportSummary(),
+                report.getPdfReport() != null,
                 report.getReportProgress(),
                 report.getCreatedAt(),
                 report.getCreatedBy(),

@@ -11,6 +11,7 @@ A Spring Boot learning project with a **Users** API and an **Orders** API, backe
 | Cache | Redis 8 (+ RedisInsight GUI) |
 | Messaging | Apache Kafka 4.1 (KRaft, single broker) + kafka-ui (kafbat) GUI |
 | AI | Spring AI 2.0 (OpenAI-compatible client) with OpenRouter, model `deepseek/deepseek-v4-flash-0731` |
+| PDF | OpenPDF 3.0 |
 | JSON | Jackson 3 |
 | Passwords | BCrypt (`spring-security-crypto`) |
 
@@ -53,6 +54,7 @@ Flyway is **disabled**. Run the scripts in `src/main/resources/db/migration` you
 | `V3__create_orders_table.sql` | Creates the `orders` table |
 | `V4__create_report_orders_table.sql` | Creates the `report_orders` table |
 | `V5__add_report_summary_to_report_orders.sql` | Adds the `report_summary` column to `report_orders` |
+| `V6__add_pdf_report_to_report_orders.sql` | Adds the `pdf_report` column (`BYTEA`) to `report_orders` |
 
 Hibernate runs with `ddl-auto: validate`: it never changes the schema, and the app refuses to start if a table or column is missing.
 
@@ -178,16 +180,19 @@ PATCH /api/orders/{id}/complete ───┴─► COMPLETED
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/report-orders` | Start a report for a user (`202`), body `{"userId": 1}` |
-| `GET` | `/api/report-orders?userId=1&page=0&size=20` | List reports, newest first. `userId` is optional |
+| `GET` | `/api/report-orders?userId=1&page=0&size=20` | List reports, newest first. `userId` is optional. `pdfAvailable` tells if the PDF can be downloaded |
+| `GET` | `/api/report-orders/{id}/pdf` | Download the PDF report (`application/pdf`, e.g. `report-order-15-completed.pdf`) |
 
 How it works:
 
 1. `POST` checks the user exists (not deleted) and creates **two** `report_orders` rows, one for `COMPLETED` and one for `IN_PROGRESS` orders, with `report_progress = IN_PROGRESS` and an empty `total_amount`. It returns right away.
-2. After the commit, a background thread (`@Async`) asks the AI model to calculate the totals. The model calls the tool `sumOrderTotalPrice(orderStatus)`, which sums `orders.total_price` of that user for the status. The tool is bound to the requested user, so the model cannot read other users' orders.
-3. The model answers with structured JSON (`completedTotalAmount`, `completedSummary`, `inProgressTotalAmount`, `inProgressSummary`). The app checks the totals match exactly what the tool returned, and that each summary states its exact total, so a made-up number is never stored.
-4. Both rows get `total_amount`, `report_summary` (e.g. "The total amount of completed orders is 15000000."), `report_progress = COMPLETED` and `updated_by = report-ai`. If anything fails (AI error, wrong answer, missing tool call), both rows become `FAILED` instead.
+2. After the commit, a background thread (`@Async`) asks the AI model to build the report with tool calling. The tools are bound to the requested user, so the model cannot read other users' orders:
+   - `sumOrderTotalPrice(orderStatus)` sums `orders.total_price` of that user for the status.
+   - `generateOrderPdfReport(orderStatus)` builds the PDF with OpenPDF: every order with its invoice number, item name, quantity, item price and total price, and the "Total all orders" row.
+3. The model answers with structured JSON (`completedTotalAmount`, `completedSummary`, `inProgressTotalAmount`, `inProgressSummary`). The app checks the totals match exactly what the tool returned, that each summary states its exact total, and that each PDF was generated and its "Total all orders" equals the total, so a made-up number is never stored.
+4. Both rows get `total_amount`, `report_summary` (e.g. "The total amount of completed orders is 15000000."), `pdf_report` (the PDF of that status), `report_progress = COMPLETED` and `updated_by = report-ai`. If anything fails (AI error, wrong answer, missing tool call), both rows become `FAILED` instead.
 
-Poll the `GET` API until `reportProgress` is no longer `IN_PROGRESS` (usually a few seconds).
+Poll the `GET` API until `reportProgress` is no longer `IN_PROGRESS` (usually a few seconds), then download the PDF. The download returns `404` for an unknown report and `409` while the report is `IN_PROGRESS`, when it `FAILED`, or for reports created before PDF reports existed.
 
 ## Redis caching
 
@@ -223,10 +228,12 @@ src/main/java/com/course/springlearning
     ├── repository/  OrderRepository
     └── service/     OrderService, OrderCache
 └── report/
-    ├── ai/          OrderReportAiClient (ChatClient), OrderReportTools (@Tool)
+    ├── ai/          OrderReportAiClient (ChatClient), OrderReportTools (@Tool), GeneratedReport
     ├── controller/  ReportOrderController
-    ├── dto/         CreateReportOrderRequest, ReportOrderResponse, ReportResult
+    ├── dto/         CreateReportOrderRequest, ReportOrderResponse, ReportResult, ReportPdfFile
     ├── entity/      ReportOrder, ReportProgress
+    ├── exception/   ReportOrderNotFoundException, ReportPdfNotAvailableException
+    ├── pdf/         OrderPdfReportGenerator (OpenPDF)
     ├── repository/  ReportOrderRepository
     └── service/     ReportOrderService, ReportOrderProcessor (@Async)
 ```
@@ -245,10 +252,12 @@ src/main/java/com/course/springlearning
 10. **kafka-ui** added to `docker-compose.yml` on port `8090` to inspect Kafka topics and messages.
 11. **Spring AI report orders**: `report_orders` table, a background AI process that uses tool calling to sum order totals for `COMPLETED` and `IN_PROGRESS`, and a list API. The OpenRouter key lives in the git-ignored `.env`.
 12. **Report summary**: `V5` adds `report_summary`, an AI-written summary per report row.
+13. **PDF reports**: `V6` adds `pdf_report`. The AI generates a PDF per report row through tool calling (OpenPDF), and `GET /api/report-orders/{id}/pdf` downloads it.
 
 ## Known limitations
 
 - If Kafka is unavailable at the moment an order is created, the order is saved but the message is not sent, so it stays `PENDING` (the error is logged). The outbox pattern would fix this.
 - There is no API to get a single order yet.
 - A report that is `IN_PROGRESS` when the app stops stays `IN_PROGRESS` (the background work is lost). Start a new report instead.
+- The report list loads the `pdf_report` bytes of each row from the database (not returned in the JSON). Fine for small PDFs; a very large number of big PDFs would need a lighter query.
 - The user cache TTL is fixed at 30 minutes in `UserCache` (only the order cache TTL is configurable).
