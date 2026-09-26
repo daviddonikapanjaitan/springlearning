@@ -94,6 +94,20 @@ services:
       retries: 10
       start_period: 15s
 
+  # Kafka GUI client to browse topics and messages, open http://localhost:8090
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:latest
+    container_name: springlearning-kafka-ui
+    ports:
+      - "8090:8080" # 8080 on the host is already used by the app
+    environment:
+      KAFKA_CLUSTERS_0_NAME: springlearning
+      # Internal listener, reachable from inside the compose network
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
+    depends_on:
+      kafka:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   redis-data:
