@@ -11,6 +11,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      # Read by docker compose from the git-ignored .env file next to this file
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy

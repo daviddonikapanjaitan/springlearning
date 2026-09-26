@@ -10,6 +10,7 @@ A Spring Boot learning project with a **Users** API and an **Orders** API, backe
 | Database | PostgreSQL 17 (schema managed manually with SQL scripts) |
 | Cache | Redis 8 (+ RedisInsight GUI) |
 | Messaging | Apache Kafka 4.1 (KRaft, single broker) + kafka-ui (kafbat) GUI |
+| AI | Spring AI 2.0 (OpenAI-compatible client) with OpenRouter, model `deepseek/deepseek-v4-flash-0731` |
 | JSON | Jackson 3 |
 | Passwords | BCrypt (`spring-security-crypto`) |
 
@@ -31,7 +32,17 @@ docker compose up -d postgres redis redisinsight kafka kafka-ui
 
 `docker compose up -d` without service names also builds and starts the app itself on port `8080`.
 
-### 2. Create the database schema
+### 2. Add your OpenRouter API key
+
+Copy `.env.example` to `.env` and put your key in it. `.env` is ignored by git, never commit it.
+
+```properties
+OPENROUTER_API_KEY=sk-or-v1-...
+```
+
+The app loads `.env` from the working directory (`spring.config.import`), and `docker compose` passes it to the app container.
+
+### 3. Create the database schema
 
 Flyway is **disabled**. Run the scripts in `src/main/resources/db/migration` yourself (e.g. with DBeaver), in order:
 
@@ -40,10 +51,12 @@ Flyway is **disabled**. Run the scripts in `src/main/resources/db/migration` you
 | `V1__create_users_table.sql` | Creates the `users` table |
 | `V2__make_email_and_username_unique.sql` | Makes email and username unique (case-insensitive, including soft-deleted users) |
 | `V3__create_orders_table.sql` | Creates the `orders` table |
+| `V4__create_report_orders_table.sql` | Creates the `report_orders` table |
+| `V5__add_report_summary_to_report_orders.sql` | Adds the `report_summary` column to `report_orders` |
 
 Hibernate runs with `ddl-auto: validate`: it never changes the schema, and the app refuses to start if a table or column is missing.
 
-### 3. Run the app
+### 4. Run the app
 
 ```bash
 ./mvnw spring-boot:run
@@ -61,6 +74,7 @@ Everything lives in `src/main/resources/application.yaml`. Connection settings c
 | `DB_USERNAME` / `DB_PASSWORD` | `postgres` / `postgres` |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` |
+| `OPENROUTER_API_KEY` | none, required (from `.env`) |
 
 App-specific settings:
 
@@ -159,6 +173,22 @@ PATCH /api/orders/{id}/complete ───┴─► COMPLETED
 - Order updates lock the row (`SELECT ... FOR UPDATE`), so the listener and the complete API cannot overwrite each other.
 - The Kafka topic `stream-order-users` (3 partitions, 1 replica) is created automatically on startup. The order id is the message key.
 
+## Report Orders API (Spring AI tool calling) — `/api/report-orders`
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/report-orders` | Start a report for a user (`202`), body `{"userId": 1}` |
+| `GET` | `/api/report-orders?userId=1&page=0&size=20` | List reports, newest first. `userId` is optional |
+
+How it works:
+
+1. `POST` checks the user exists (not deleted) and creates **two** `report_orders` rows, one for `COMPLETED` and one for `IN_PROGRESS` orders, with `report_progress = IN_PROGRESS` and an empty `total_amount`. It returns right away.
+2. After the commit, a background thread (`@Async`) asks the AI model to calculate the totals. The model calls the tool `sumOrderTotalPrice(orderStatus)`, which sums `orders.total_price` of that user for the status. The tool is bound to the requested user, so the model cannot read other users' orders.
+3. The model answers with structured JSON (`completedTotalAmount`, `completedSummary`, `inProgressTotalAmount`, `inProgressSummary`). The app checks the totals match exactly what the tool returned, and that each summary states its exact total, so a made-up number is never stored.
+4. Both rows get `total_amount`, `report_summary` (e.g. "The total amount of completed orders is 15000000."), `report_progress = COMPLETED` and `updated_by = report-ai`. If anything fails (AI error, wrong answer, missing tool call), both rows become `FAILED` instead.
+
+Poll the `GET` API until `reportProgress` is no longer `IN_PROGRESS` (usually a few seconds).
+
 ## Redis caching
 
 Cached values are stored as JSON and expire after 30 minutes. If Redis is down or a cached value is unreadable, the app logs a warning and reads from the database instead.
@@ -176,7 +206,7 @@ Eviction happens after the database transaction commits. If you change data dire
 
 ```
 src/main/java/com/course/springlearning
-├── config/          GlobalExceptionHandler, PasswordConfig
+├── config/          GlobalExceptionHandler, PasswordConfig, AsyncConfig
 ├── user/
 │   ├── controller/  UserController
 │   ├── dto/         CreateUserRequest, UpdateUserRequest, UserResponse, PageResponse
@@ -192,6 +222,13 @@ src/main/java/com/course/springlearning
     ├── kafka/       OrderKafkaConfig, OrderEventPublisher, OrderEventListener
     ├── repository/  OrderRepository
     └── service/     OrderService, OrderCache
+└── report/
+    ├── ai/          OrderReportAiClient (ChatClient), OrderReportTools (@Tool)
+    ├── controller/  ReportOrderController
+    ├── dto/         CreateReportOrderRequest, ReportOrderResponse, ReportResult
+    ├── entity/      ReportOrder, ReportProgress
+    ├── repository/  ReportOrderRepository
+    └── service/     ReportOrderService, ReportOrderProcessor (@Async)
 ```
 
 ## Development history
@@ -206,9 +243,12 @@ src/main/java/com/course/springlearning
 8. **Order list API** with a Redis cache, evicted by create, the listener and complete. The cache TTL is configurable with `app.cache.orders.ttl`.
 9. **Active users only**: only enabled, non-deleted users can create and complete orders.
 10. **kafka-ui** added to `docker-compose.yml` on port `8090` to inspect Kafka topics and messages.
+11. **Spring AI report orders**: `report_orders` table, a background AI process that uses tool calling to sum order totals for `COMPLETED` and `IN_PROGRESS`, and a list API. The OpenRouter key lives in the git-ignored `.env`.
+12. **Report summary**: `V5` adds `report_summary`, an AI-written summary per report row.
 
 ## Known limitations
 
 - If Kafka is unavailable at the moment an order is created, the order is saved but the message is not sent, so it stays `PENDING` (the error is logged). The outbox pattern would fix this.
 - There is no API to get a single order yet.
+- A report that is `IN_PROGRESS` when the app stops stays `IN_PROGRESS` (the background work is lost). Start a new report instead.
 - The user cache TTL is fixed at 30 minutes in `UserCache` (only the order cache TTL is configurable).
