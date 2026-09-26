@@ -1,5 +1,6 @@
-package com.course.springlearning.user;
+package com.course.springlearning.user.controller;
 
+import com.course.springlearning.user.service.UserService;
 import com.course.springlearning.user.dto.CreateUserRequest;
 import com.course.springlearning.user.dto.PageResponse;
 import com.course.springlearning.user.dto.UpdateUserRequest;

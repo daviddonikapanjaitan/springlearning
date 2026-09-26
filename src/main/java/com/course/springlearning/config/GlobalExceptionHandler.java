@@ -1,7 +1,7 @@
 package com.course.springlearning.config;
 
-import com.course.springlearning.user.DuplicateUserException;
-import com.course.springlearning.user.UserNotFoundException;
+import com.course.springlearning.user.exception.DuplicateUserException;
+import com.course.springlearning.user.exception.UserNotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;

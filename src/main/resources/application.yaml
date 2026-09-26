@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: springlearning
+
+  # PostgreSQL (defaults target local run against docker-compose services)
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/springlearning}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+
+  # Flyway is off: run the scripts in db/migration manually (e.g. with DBeaver)
+  flyway:
+    enabled: false
+
+  # Hibernate only validates the schema against the entities, it never changes it
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  # Redis
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  # Kafka
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: springlearning
+      auto-offset-reset: earliest

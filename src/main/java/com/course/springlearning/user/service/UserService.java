@@ -1,9 +1,13 @@
-package com.course.springlearning.user;
+package com.course.springlearning.user.service;
 
 import com.course.springlearning.user.dto.CreateUserRequest;
 import com.course.springlearning.user.dto.PageResponse;
 import com.course.springlearning.user.dto.UpdateUserRequest;
 import com.course.springlearning.user.dto.UserResponse;
+import com.course.springlearning.user.entity.User;
+import com.course.springlearning.user.repository.UserRepository;
+import com.course.springlearning.user.exception.DuplicateUserException;
+import com.course.springlearning.user.exception.UserNotFoundException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -29,10 +33,10 @@ public class UserService {
         String email = normalizeEmail(request.email());
         String username = request.username().trim();
 
-        if (userRepository.existsByEmailAndDeletedFalse(email)) {
+        if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new DuplicateUserException("Email '" + email + "' is already in use");
         }
-        if (userRepository.existsByUsernameAndDeletedFalse(username)) {
+        if (userRepository.existsByUsernameIgnoreCase(username)) {
             throw new DuplicateUserException("Username '" + username + "' is already in use");
         }
 
@@ -70,10 +74,10 @@ public class UserService {
         String email = normalizeEmail(request.email());
         String username = request.username().trim();
 
-        if (userRepository.existsByEmailAndDeletedFalseAndIdNot(email, id)) {
+        if (userRepository.existsByEmailIgnoreCaseAndIdNot(email, id)) {
             throw new DuplicateUserException("Email '" + email + "' is already in use");
         }
-        if (userRepository.existsByUsernameAndDeletedFalseAndIdNot(username, id)) {
+        if (userRepository.existsByUsernameIgnoreCaseAndIdNot(username, id)) {
             throw new DuplicateUserException("Username '" + username + "' is already in use");
         }
 

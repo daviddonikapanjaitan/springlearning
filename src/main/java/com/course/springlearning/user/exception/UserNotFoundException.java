@@ -1,4 +1,4 @@
-package com.course.springlearning.user;
+package com.course.springlearning.user.exception;
 
 public class UserNotFoundException extends RuntimeException {
 
