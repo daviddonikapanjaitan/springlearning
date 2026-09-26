@@ -1,9 +1,13 @@
-package com.course.springlearning.user;
+package com.course.springlearning.user.service;
 
 import com.course.springlearning.user.dto.CreateUserRequest;
 import com.course.springlearning.user.dto.PageResponse;
 import com.course.springlearning.user.dto.UpdateUserRequest;
 import com.course.springlearning.user.dto.UserResponse;
+import com.course.springlearning.user.entity.User;
+import com.course.springlearning.user.repository.UserRepository;
+import com.course.springlearning.user.exception.DuplicateUserException;
+import com.course.springlearning.user.exception.UserNotFoundException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -18,10 +22,12 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserCache userCache;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, UserCache userCache) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.userCache = userCache;
     }
 
     @Transactional
@@ -29,10 +35,10 @@ public class UserService {
         String email = normalizeEmail(request.email());
         String username = request.username().trim();
 
-        if (userRepository.existsByEmailAndDeletedFalse(email)) {
+        if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new DuplicateUserException("Email '" + email + "' is already in use");
         }
-        if (userRepository.existsByUsernameAndDeletedFalse(username)) {
+        if (userRepository.existsByUsernameIgnoreCase(username)) {
             throw new DuplicateUserException("Username '" + username + "' is already in use");
         }
 
@@ -51,37 +57,26 @@ public class UserService {
         user.setUpdatedAt(now);
         user.setUpdatedBy(actor);
 
-        return UserResponse.from(userRepository.saveAndFlush(user));
+        UserResponse created = UserResponse.from(userRepository.saveAndFlush(user));
+        // A new user shifts the cached list pages
+        userCache.evictListsAfterCommit();
+        return created;
     }
 
-    @Transactional(readOnly = true)
+    // Not @Transactional: a cache hit should not open a database connection
     public UserResponse findById(Long id) {
-        return UserResponse.from(getActiveUser(id));
+        return userCache.getUser(id, () -> UserResponse.from(getActiveUser(id)));
     }
 
-    @Transactional(readOnly = true)
     public PageResponse<UserResponse> findAll(Pageable pageable) {
-        return PageResponse.from(userRepository.findAllByDeletedFalse(pageable).map(UserResponse::from));
+        return userCache.getPage(pageable.getPageNumber(), pageable.getPageSize(),
+                () -> PageResponse.from(userRepository.findAllByDeletedFalse(pageable).map(UserResponse::from)));
     }
 
     @Transactional
     public UserResponse update(Long id, UpdateUserRequest request, String actor) {
         User user = getActiveUser(id);
-        String email = normalizeEmail(request.email());
-        String username = request.username().trim();
 
-        if (userRepository.existsByEmailAndDeletedFalseAndIdNot(email, id)) {
-            throw new DuplicateUserException("Email '" + email + "' is already in use");
-        }
-        if (userRepository.existsByUsernameAndDeletedFalseAndIdNot(username, id)) {
-            throw new DuplicateUserException("Username '" + username + "' is already in use");
-        }
-
-        user.setEmail(email);
-        if (request.password() != null) {
-            user.setPassword(passwordEncoder.encode(request.password()));
-        }
-        user.setUsername(username);
         user.setFullName(request.fullName().trim());
         user.setAddress(trimToNull(request.address()));
         user.setGender(trimToNull(request.gender()));
@@ -91,7 +86,9 @@ public class UserService {
         user.setUpdatedAt(now());
         user.setUpdatedBy(actor);
 
-        return UserResponse.from(userRepository.saveAndFlush(user));
+        UserResponse updated = UserResponse.from(userRepository.saveAndFlush(user));
+        userCache.evictUserAfterCommit(id);
+        return updated;
     }
 
     // Soft delete: the row stays in the table with is_deleted = true
@@ -102,6 +99,7 @@ public class UserService {
         user.setUpdatedAt(now());
         user.setUpdatedBy(actor);
         userRepository.saveAndFlush(user);
+        userCache.evictUserAfterCommit(id);
     }
 
     private User getActiveUser(Long id) {

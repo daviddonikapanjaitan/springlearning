@@ -1,4 +1,4 @@
-package com.course.springlearning.user;
+package com.course.springlearning.user.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

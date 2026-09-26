@@ -1,5 +1,6 @@
-package com.course.springlearning.user;
+package com.course.springlearning.user.repository;
 
+import com.course.springlearning.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,11 +13,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Page<User> findAllByDeletedFalse(Pageable pageable);
 
-    boolean existsByEmailAndDeletedFalse(String email);
+    boolean existsByEmailIgnoreCase(String email);
 
-    boolean existsByUsernameAndDeletedFalse(String username);
-
-    boolean existsByEmailAndDeletedFalseAndIdNot(String email, Long id);
-
-    boolean existsByUsernameAndDeletedFalseAndIdNot(String username, Long id);
+    boolean existsByUsernameIgnoreCase(String username);
 }

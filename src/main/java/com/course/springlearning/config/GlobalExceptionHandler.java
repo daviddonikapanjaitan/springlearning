@@ -1,7 +1,11 @@
 package com.course.springlearning.config;
 
-import com.course.springlearning.user.DuplicateUserException;
-import com.course.springlearning.user.UserNotFoundException;
+import com.course.springlearning.order.exception.InvalidOrderStatusException;
+import com.course.springlearning.order.exception.OrderAccessDeniedException;
+import com.course.springlearning.order.exception.OrderNotFoundException;
+import com.course.springlearning.user.exception.DuplicateUserException;
+import com.course.springlearning.user.exception.UserDisabledException;
+import com.course.springlearning.user.exception.UserNotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -25,15 +29,36 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    @ExceptionHandler(UserDisabledException.class)
+    public ProblemDetail handleUserDisabled(UserDisabledException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
     @ExceptionHandler(DuplicateUserException.class)
     public ProblemDetail handleDuplicate(DuplicateUserException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
     }
 
-    // Safety net: two concurrent requests can pass the service check, the unique index still rejects one
+    @ExceptionHandler(OrderNotFoundException.class)
+    public ProblemDetail handleOrderNotFound(OrderNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(OrderAccessDeniedException.class)
+    public ProblemDetail handleOrderAccessDenied(OrderAccessDeniedException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidOrderStatusException.class)
+    public ProblemDetail handleInvalidOrderStatus(InvalidOrderStatusException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    // Safety net: two concurrent requests can pass the service check, a unique index still rejects one
+    // (duplicate email/username, or the very unlikely duplicate invoice number)
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail handleDataIntegrity(DataIntegrityViolationException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Email or username is already in use");
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "The request conflicts with existing data");
     }
 
     @Override

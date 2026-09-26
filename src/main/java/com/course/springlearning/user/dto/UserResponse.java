@@ -1,6 +1,6 @@
 package com.course.springlearning.user.dto;
 
-import com.course.springlearning.user.User;
+import com.course.springlearning.user.entity.User;
 
 import java.time.Instant;
 
