@@ -49,6 +49,23 @@ services:
       timeout: 5s
       retries: 10
 
+  # Redis GUI client, open http://localhost:5540
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: springlearning-redisinsight
+    ports:
+      - "5540:5540"
+    environment:
+      # Pre-registers the redis service so no manual connection setup is needed
+      RI_REDIS_HOST: redis
+      RI_REDIS_PORT: 6379
+      RI_REDIS_ALIAS: springlearning-redis
+    volumes:
+      - redisinsight-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
   kafka:
     image: apache/kafka:4.1.0
     container_name: springlearning-kafka
@@ -80,4 +97,5 @@ services:
 volumes:
   postgres-data:
   redis-data:
+  redisinsight-data:
   kafka-data:
