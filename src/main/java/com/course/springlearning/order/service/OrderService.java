@@ -10,11 +10,14 @@ import com.course.springlearning.order.exception.OrderAccessDeniedException;
 import com.course.springlearning.order.exception.OrderNotFoundException;
 import com.course.springlearning.order.kafka.OrderEventPublisher;
 import com.course.springlearning.order.repository.OrderRepository;
+import com.course.springlearning.user.dto.PageResponse;
 import com.course.springlearning.user.entity.User;
+import com.course.springlearning.user.exception.UserDisabledException;
 import com.course.springlearning.user.exception.UserNotFoundException;
 import com.course.springlearning.user.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,18 +38,34 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final OrderEventPublisher orderEventPublisher;
+    private final OrderCache orderCache;
 
     public OrderService(OrderRepository orderRepository, UserRepository userRepository,
-                        OrderEventPublisher orderEventPublisher) {
+                        OrderEventPublisher orderEventPublisher, OrderCache orderCache) {
         this.orderRepository = orderRepository;
         this.userRepository = userRepository;
         this.orderEventPublisher = orderEventPublisher;
+        this.orderCache = orderCache;
+    }
+
+    /**
+     * Lists orders using the page, size and sort of the given pageable.
+     * Not @Transactional: a cache hit should not open a database connection.
+     *
+     * @param userId null lists the orders of all users
+     */
+    public PageResponse<OrderResponse> findAll(Long userId, Pageable pageable) {
+        return orderCache.getPage(userId, pageable.getPageNumber(), pageable.getPageSize(), () -> {
+            var orders = userId == null
+                    ? orderRepository.findAll(pageable)
+                    : orderRepository.findAllByUser_Id(userId, pageable);
+            return PageResponse.from(orders.map(OrderResponse::from));
+        });
     }
 
     @Transactional
     public OrderResponse create(CreateOrderRequest request, String actor) {
-        User user = userRepository.findByIdAndDeletedFalse(request.userId())
-                .orElseThrow(() -> new UserNotFoundException(request.userId()));
+        User user = getActiveEnabledUser(request.userId());
 
         Instant now = now();
         Order order = new Order();
@@ -67,6 +86,7 @@ public class OrderService {
         Order saved = orderRepository.saveAndFlush(order);
         orderEventPublisher.publishOrderCreatedAfterCommit(
                 new OrderCreatedMessage(saved.getId(), user.getId(), saved.getInvoiceNumber()));
+        orderCache.evictListsAfterCommit();
         return OrderResponse.from(saved);
     }
 
@@ -90,12 +110,14 @@ public class OrderService {
         order.setOrderStatus(OrderStatus.IN_PROGRESS);
         order.setUpdatedAt(now());
         order.setUpdatedBy(actor);
+        orderCache.evictListsAfterCommit();
         log.info("Order {} received, status changed to {}", orderId, OrderStatus.IN_PROGRESS);
     }
 
-    /** IN_PROGRESS -> COMPLETED, only by the user who created the order. */
+    /** IN_PROGRESS -> COMPLETED, only by the user who created the order while that user is enabled and not deleted. */
     @Transactional
     public OrderResponse complete(Long orderId, Long userId, String actor) {
+        getActiveEnabledUser(userId);
         Order order = orderRepository.findWithLockById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
 
@@ -115,7 +137,19 @@ public class OrderService {
         order.setOrderStatus(OrderStatus.COMPLETED);
         order.setUpdatedAt(now());
         order.setUpdatedBy(actor);
-        return OrderResponse.from(orderRepository.saveAndFlush(order));
+        OrderResponse completed = OrderResponse.from(orderRepository.saveAndFlush(order));
+        orderCache.evictListsAfterCommit();
+        return completed;
+    }
+
+    // Only users with is_deleted = false and is_enabled = true may create or complete orders
+    private User getActiveEnabledUser(Long userId) {
+        User user = userRepository.findByIdAndDeletedFalse(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+        if (!user.isEnabled()) {
+            throw new UserDisabledException(userId);
+        }
+        return user;
     }
 
     // e.g. INV-20260927-3F9A1C2B7D4E, uniqueness is also enforced by ux_orders_invoice_number

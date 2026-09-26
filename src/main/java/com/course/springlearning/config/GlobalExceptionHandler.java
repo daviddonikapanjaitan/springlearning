@@ -4,6 +4,7 @@ import com.course.springlearning.order.exception.InvalidOrderStatusException;
 import com.course.springlearning.order.exception.OrderAccessDeniedException;
 import com.course.springlearning.order.exception.OrderNotFoundException;
 import com.course.springlearning.user.exception.DuplicateUserException;
+import com.course.springlearning.user.exception.UserDisabledException;
 import com.course.springlearning.user.exception.UserNotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
@@ -26,6 +27,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(UserNotFoundException.class)
     public ProblemDetail handleNotFound(UserNotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(UserDisabledException.class)
+    public ProblemDetail handleUserDisabled(UserDisabledException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
     @ExceptionHandler(DuplicateUserException.class)

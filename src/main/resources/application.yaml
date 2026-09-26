@@ -34,3 +34,10 @@ spring:
     consumer:
       group-id: springlearning
       auto-offset-reset: earliest
+
+# Application settings
+app:
+  cache:
+    orders:
+      # How long a cached order list page lives in Redis (e.g. 30m, 1h, 90s)
+      ttl: 30m
