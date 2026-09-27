@@ -1,5 +1,6 @@
 package com.course.springlearning.user.controller;
 
+import com.course.springlearning.auth.security.AuthenticatedUser;
 import com.course.springlearning.user.service.UserService;
 import com.course.springlearning.user.dto.CreateUserRequest;
 import com.course.springlearning.user.dto.PageResponse;
@@ -9,9 +10,9 @@ import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,11 +24,13 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
 
+// POST /api/users (registration) is public, every other endpoint needs "Authorization: Bearer <token>".
+// The /me endpoints work on the user of the token, and store the token's username in updated_by
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
 
-    // Who performs the action, stored in created_by / updated_by
+    // Public registration only: who performs the action, stored in created_by / updated_by
     private static final String ACTOR_HEADER = "X-Actor";
     private static final String DEFAULT_ACTOR = "system";
     private static final int MAX_PAGE_SIZE = 100;
@@ -44,8 +47,8 @@ public class UserController {
             @RequestHeader(name = ACTOR_HEADER, required = false) String actor) {
         UserResponse created = userService.create(request, resolveActor(actor));
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
-                .path("/{id}")
-                .buildAndExpand(created.id())
+                .path("/me")
+                .build()
                 .toUri();
         return ResponseEntity.created(location).body(created);
     }
@@ -59,24 +62,23 @@ public class UserController {
         return userService.findAll(PageRequest.of(safePage, safeSize, Sort.by("id")));
     }
 
-    @GetMapping("/{id}")
-    public UserResponse findById(@PathVariable Long id) {
-        return userService.findById(id);
+    @GetMapping("/me")
+    public UserResponse findMe(@AuthenticationPrincipal AuthenticatedUser user) {
+        return userService.findById(user.userId());
     }
 
-    @PutMapping("/{id}")
-    public UserResponse update(
-            @PathVariable Long id,
+    // Disabling yourself (enabled = false) revokes your tokens
+    @PutMapping("/me")
+    public UserResponse updateMe(
             @Valid @RequestBody UpdateUserRequest request,
-            @RequestHeader(name = ACTOR_HEADER, required = false) String actor) {
-        return userService.update(id, request, resolveActor(actor));
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        return userService.update(user.userId(), request, user.username());
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(
-            @PathVariable Long id,
-            @RequestHeader(name = ACTOR_HEADER, required = false) String actor) {
-        userService.delete(id, resolveActor(actor));
+    // Soft deletes yourself and revokes your tokens
+    @DeleteMapping("/me")
+    public ResponseEntity<Void> deleteMe(@AuthenticationPrincipal AuthenticatedUser user) {
+        userService.delete(user.userId(), user.username());
         return ResponseEntity.noContent().build();
     }
 

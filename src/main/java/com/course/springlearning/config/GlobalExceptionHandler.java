@@ -1,5 +1,6 @@
 package com.course.springlearning.config;
 
+import com.course.springlearning.auth.exception.InvalidCredentialsException;
 import com.course.springlearning.order.exception.InvalidOrderStatusException;
 import com.course.springlearning.order.exception.OrderAccessDeniedException;
 import com.course.springlearning.order.exception.OrderNotFoundException;
@@ -25,6 +26,11 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ProblemDetail handleInvalidCredentials(InvalidCredentialsException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
 
     @ExceptionHandler(UserNotFoundException.class)
     public ProblemDetail handleNotFound(UserNotFoundException ex) {

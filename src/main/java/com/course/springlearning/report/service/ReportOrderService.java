@@ -77,19 +77,19 @@ public class ReportOrderService {
         return saved.stream().map(ReportOrderResponse::from).toList();
     }
 
-    /** @param userId null lists the reports of all users */
+    /** The reports of one user. */
     @Transactional(readOnly = true)
     public PageResponse<ReportOrderResponse> findAll(Long userId, Pageable pageable) {
-        var reports = userId == null
-                ? reportOrderRepository.findAll(pageable)
-                : reportOrderRepository.findAllByUser_Id(userId, pageable);
-        return PageResponse.from(reports.map(ReportOrderResponse::from));
+        return PageResponse.from(reportOrderRepository.findAllByUser_Id(userId, pageable).map(ReportOrderResponse::from));
     }
 
-    /** The PDF of a COMPLETED report, e.g. file name report-order-7-completed.pdf */
+    /**
+     * The PDF of a COMPLETED report of the user, e.g. file name report-order-7-completed.pdf.
+     * A report of another user is reported as not found, so report ids of other users are not revealed.
+     */
     @Transactional(readOnly = true)
-    public ReportPdfFile getPdf(Long id) {
-        ReportOrder report = reportOrderRepository.findById(id)
+    public ReportPdfFile getPdf(Long id, Long userId) {
+        ReportOrder report = reportOrderRepository.findByIdAndUser_Id(id, userId)
                 .orElseThrow(() -> new ReportOrderNotFoundException(id));
         if (report.getReportProgress() != ReportProgress.COMPLETED || report.getPdfReport() == null) {
             throw new ReportPdfNotAvailableException(id, report.getReportProgress());
