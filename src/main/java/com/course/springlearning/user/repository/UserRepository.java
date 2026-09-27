@@ -20,7 +20,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsernameIgnoreCase(String username);
 
     // SELECT ... FOR UPDATE, used by login so two logins of the same user cannot run at once.
-    // Username is unique case-insensitively (ux_users_username), so there is at most one match
+    // Email is unique case-insensitively (ux_users_email), so there is at most one match
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    Optional<User> findWithLockByUsernameIgnoreCaseAndDeletedFalse(String username);
+    Optional<User> findWithLockByEmailIgnoreCaseAndDeletedFalse(String email);
 }

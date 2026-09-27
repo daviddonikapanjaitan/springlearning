@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 
 @Service
 public class AuthService {
@@ -21,7 +22,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
-    // Checked when the username does not exist, so both cases take as long as a real BCrypt check
+    // Checked when the email does not exist, so both cases take as long as a real BCrypt check
     private final String dummyPasswordHash;
 
     public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, TokenService tokenService) {
@@ -32,15 +33,16 @@ public class AuthService {
     }
 
     /**
-     * Checks the username and password of an active user, revokes the user's old tokens
+     * Checks the email and password of an active user, revokes the user's old tokens
      * and returns a new token valid for {@code app.security.jwt.expiration} (1 hour).
      */
     @Transactional
     public LoginResponse login(LoginRequest request) {
         // SELECT ... FOR UPDATE: two logins of the same user run one after the other,
         // so the second one always revokes the token of the first one
-        User user = userRepository.findWithLockByUsernameIgnoreCaseAndDeletedFalse(request.username().trim())
-                .orElse(null);
+        // Emails are stored in lowercase (see UserService)
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
+        User user = userRepository.findWithLockByEmailIgnoreCaseAndDeletedFalse(email).orElse(null);
         if (user == null) {
             passwordMatches(request.password(), dummyPasswordHash);
             throw new InvalidCredentialsException();

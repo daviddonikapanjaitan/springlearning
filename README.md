@@ -104,13 +104,13 @@ App-specific settings:
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/auth/login` | Public. Log in with username and password, returns a JWT valid for 1 hour |
+| `POST` | `/api/auth/login` | Public. Log in with email and password, returns a JWT valid for 1 hour |
 | `POST` | `/api/auth/logout` | Needs the token. Revokes and expires it (`204`) |
 
 Login body and response:
 
 ```json
-{ "username": "john", "password": "password123" }
+{ "email": "john@example.com", "password": "password123" }
 ```
 
 ```json
@@ -140,7 +140,7 @@ Then send `Authorization: Bearer <accessToken>` with every other request.
 | Malformed or wrongly signed token | `401 Token is invalid` |
 | Token past its expiry | `401 Token has expired` |
 | Token revoked (logout, newer login, user disabled or deleted) | `401 Token has been revoked` |
-| Wrong username or password | `401 Invalid username or password` |
+| Wrong email or password | `401 Invalid email or password` |
 | Correct password but user disabled | `403` |
 
 ## Users API — `/api/users`
