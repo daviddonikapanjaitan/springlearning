@@ -49,23 +49,17 @@ public class OrderService {
     }
 
     /**
-     * Lists orders using the page, size and sort of the given pageable.
+     * Lists the orders of one user using the page, size and sort of the given pageable.
      * Not @Transactional: a cache hit should not open a database connection.
-     *
-     * @param userId null lists the orders of all users
      */
     public PageResponse<OrderResponse> findAll(Long userId, Pageable pageable) {
-        return orderCache.getPage(userId, pageable.getPageNumber(), pageable.getPageSize(), () -> {
-            var orders = userId == null
-                    ? orderRepository.findAll(pageable)
-                    : orderRepository.findAllByUser_Id(userId, pageable);
-            return PageResponse.from(orders.map(OrderResponse::from));
-        });
+        return orderCache.getPage(userId, pageable.getPageNumber(), pageable.getPageSize(),
+                () -> PageResponse.from(orderRepository.findAllByUser_Id(userId, pageable).map(OrderResponse::from)));
     }
 
     @Transactional
-    public OrderResponse create(CreateOrderRequest request, String actor) {
-        User user = getActiveEnabledUser(request.userId());
+    public OrderResponse create(CreateOrderRequest request, Long userId, String actor) {
+        User user = getActiveEnabledUser(userId);
 
         Instant now = now();
         Order order = new Order();

@@ -7,6 +7,10 @@ spring:
   config:
     import: "optional:file:.env[.properties]"
 
+  # Users only log in through POST /api/auth/login (JWT), so Spring Boot's default in-memory user is not created
+  autoconfigure:
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+
   # PostgreSQL (defaults target local run against docker-compose services)
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/springlearning}
@@ -64,3 +68,11 @@ app:
     orders:
       # How long a cached order list page lives in Redis (e.g. 30m, 1h, 90s)
       ttl: 30m
+  security:
+    jwt:
+      # Base64-encoded HMAC-SHA key of at least 32 bytes (256 bits), from .env or an environment variable
+      secret: ${JWT_SECRET}
+      # How long an access token is valid
+      expiration: 1h
+      # How often tokens past their expiry are marked expired and revoked in the tokens table
+      expired-cleanup-interval: 5m

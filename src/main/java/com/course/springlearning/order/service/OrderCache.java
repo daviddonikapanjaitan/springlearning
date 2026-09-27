@@ -19,7 +19,7 @@ import java.util.function.Supplier;
 /**
  * Read-through Redis cache for the order list, stored as JSON.
  * <ul>
- *   <li>{@code orders:list:user:{userId|all}:page:{page}:size:{size}} holds one page of the list</li>
+ *   <li>{@code orders:list:user:{userId}:page:{page}:size:{size}} holds one page of the orders of one user</li>
  *   <li>{@code orders:list:keys} is a set of all cached list keys, so they can be evicted without scanning Redis</li>
  * </ul>
  * Any order change (create, received by the Kafka listener, complete) evicts every cached page.
@@ -47,10 +47,9 @@ public class OrderCache {
         this.ttl = ttl;
     }
 
-    /** @param userId null caches the list of all orders */
     public PageResponse<OrderResponse> getPage(Long userId, int page, int size,
                                                Supplier<PageResponse<OrderResponse>> loader) {
-        String key = LIST_KEY_PREFIX + "user:" + (userId == null ? "all" : userId) + ":page:" + page + ":size:" + size;
+        String key = LIST_KEY_PREFIX + "user:" + userId + ":page:" + page + ":size:" + size;
 
         PageResponse<OrderResponse> cached = read(key);
         if (cached != null) {

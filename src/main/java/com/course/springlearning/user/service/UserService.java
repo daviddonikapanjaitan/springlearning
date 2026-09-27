@@ -1,5 +1,6 @@
 package com.course.springlearning.user.service;
 
+import com.course.springlearning.auth.service.TokenService;
 import com.course.springlearning.user.dto.CreateUserRequest;
 import com.course.springlearning.user.dto.PageResponse;
 import com.course.springlearning.user.dto.UpdateUserRequest;
@@ -23,11 +24,14 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserCache userCache;
+    private final TokenService tokenService;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, UserCache userCache) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, UserCache userCache,
+                       TokenService tokenService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.userCache = userCache;
+        this.tokenService = tokenService;
     }
 
     @Transactional
@@ -87,6 +91,10 @@ public class UserService {
         user.setUpdatedBy(actor);
 
         UserResponse updated = UserResponse.from(userRepository.saveAndFlush(user));
+        // A disabled user cannot use the API anymore
+        if (!user.isEnabled()) {
+            tokenService.revokeAllForUser(id, actor);
+        }
         userCache.evictUserAfterCommit(id);
         return updated;
     }
@@ -99,6 +107,8 @@ public class UserService {
         user.setUpdatedAt(now());
         user.setUpdatedBy(actor);
         userRepository.saveAndFlush(user);
+        // A deleted user cannot use the API anymore
+        tokenService.revokeAllForUser(id, actor);
         userCache.evictUserAfterCommit(id);
     }
 

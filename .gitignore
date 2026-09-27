@@ -34,3 +34,6 @@ build/
 
 ### Local secrets ###
 .env
+
+### Serena (local MCP tool data) ###
+.serena/

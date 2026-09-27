@@ -7,11 +7,8 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
-// The limits keep quantity * itemPrice within a BIGINT
+// The user comes from the JWT. The limits keep quantity * itemPrice within a BIGINT
 public record CreateOrderRequest(
-        @NotNull @Positive
-        Long userId,
-
         @NotBlank @Size(max = 255)
         String itemName,
 
